@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>moxGFP::μNS — FL vs MR</title>
+  <script src="openseadragon/openseadragon.min.js"></script>
+  <script src="openseadragon/openseadragon-scalebar.js"></script>
+  <style>
+    html,body{height:100%;margin:0;background:#111;color:#eee;font-family:system-ui,sans-serif}
+    .row{display:flex;height:100%}
+    .pane{flex:1;display:flex;flex-direction:column;min-width:0}
+    .title{padding:8px 10px;font-size:14px;background:#1a1a1a;border-bottom:1px solid #222}
+    .viewer{flex:1}
+  </style>
+</head>
+<body>
+  <div class="row">
+    <div class="pane">
+      <div class="title">moxGFP::μNS(1-721)</div>
+      <div id="fl" class="viewer"></div>
+    </div>
+    <div class="pane">
+      <div class="title">moxGFP::μNS(472-721)</div>
+      <div id="mr" class="viewer"></div>
+    </div>
+  </div>
+
+  <script>
+    const prefix = "openseadragon/images/";
+    const LEFT  = "FL_zoomify/";   // folder with ImageProperties.xml
+    const RIGHT = "MR_zoomify/";
+
+    // Microscopy scale
+    const PX_PER_MICRON = 7.07106445;
+    const PX_PER_METER  = PX_PER_MICRON * 1e6;
+
+    async function getProps(root) {
+      const r = await fetch(root + "ImageProperties.xml");
+      if (!r.ok) throw new Error(`Cannot fetch ${root}ImageProperties.xml (${r.status})`);
+      const txt = await r.text();
+      const xml = new DOMParser().parseFromString(txt, "text/xml");
+      const ip  = xml.querySelector("IMAGE_PROPERTIES, ImageProperties, image_properties") || xml.documentElement;
+      const width    = +ip.getAttribute("WIDTH")    || +ip.getAttribute("width");
+      const height   = +ip.getAttribute("HEIGHT")   || +ip.getAttribute("height");
+      const tileSize = +(ip.getAttribute("TILESIZE") || ip.getAttribute("tilesize") || 256);
+      return { width, height, tileSize };
+    }
+
+    function start(id, root, props) {
+      const v = OpenSeadragon({
+        id,
+        prefixUrl: prefix,
+        showNavigator: false,          // mini-map OFF
+        // Hide hover controls completely:
+        showZoomControl: false,
+        showHomeControl: false,
+        showFullPageControl: false,
+        showRotationControl: false,
+        autoHideControls: false,
+        tileSources: {
+          type: "zoomifytileservice",
+          tilesUrl: root,
+          width: props.width,
+          height: props.height,
+          tileSize: props.tileSize,
+          fileFormat: "jpg"
+        }
+      });
+
+      v.addHandler("open", () => {
+        if (OpenSeadragon.ScalebarType) {
+          v.scalebar({
+            type: OpenSeadragon.ScalebarType.MICROSCOPY,
+            pixelsPerMeter: PX_PER_METER,
+            location: OpenSeadragon.ScalebarLocation.BOTTOM_LEFT,
+            xOffset: 12, yOffset: 12,
+            barThickness: 4,
+            color: "white", fontColor: "white",
+            backgroundColor: "rgba(0,0,0,0.5)",
+            stayInsideImage: true
+          });
+        }
+      });
+
+      return v;
+    }
+
+    (async () => {
+      const [pL, pR] = await Promise.all([getProps(LEFT), getProps(RIGHT)]);
+      start("fl", LEFT,  pL);
+      start("mr", RIGHT, pR);
+    })();
+  </script>
+</body>
+</html>
